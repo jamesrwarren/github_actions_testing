@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+  webserver1:
+    image: php:7.2-apache
+    expose:
+      - 80
+    environment:
+      VIRTUAL_HOST: web1.localhost
+    volumes:
+      - $PWD/html:/var/www/html
+networks:
+  default:
+    external:
+      name: nginx-proxy

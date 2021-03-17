@@ -1,0 +1,72 @@
+# If we receive X-Forwarded-Proto, pass it through; otherwise, pass along the
+# scheme used to connect to this server
+map $http_x_forwarded_proto $proxy_x_forwarded_proto {
+  default $http_x_forwarded_proto;
+  ''      $scheme;
+}
+# If we receive X-Forwarded-Port, pass it through; otherwise, pass along the
+# server port the client connected to
+map $http_x_forwarded_port $proxy_x_forwarded_port {
+  default $http_x_forwarded_port;
+  ''      $server_port;
+}
+# If we receive Upgrade, set Connection to "upgrade"; otherwise, delete any
+# Connection header that may have been passed to this server
+map $http_upgrade $proxy_connection {
+  default upgrade;
+  '' close;
+}
+# Apply fix for very long server names
+server_names_hash_bucket_size 128;
+# Default dhparam
+ssl_dhparam /etc/nginx/dhparam/dhparam.pem;
+# Set appropriate X-Forwarded-Ssl header
+map $scheme $proxy_x_forwarded_ssl {
+  default off;
+  https on;
+}
+gzip_types text/plain text/css application/javascript application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
+log_format vhost '$host $remote_addr - $remote_user [$time_local] '
+                 '"$request" $status $body_bytes_sent '
+                 '"$http_referer" "$http_user_agent"';
+access_log off;
+		ssl_protocols TLSv1.2 TLSv1.3;
+		ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+		ssl_prefer_server_ciphers off;
+# HTTP 1.1 support
+proxy_http_version 1.1;
+proxy_buffering off;
+proxy_set_header Host $http_host;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection $proxy_connection;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $proxy_x_forwarded_proto;
+proxy_set_header X-Forwarded-Ssl $proxy_x_forwarded_ssl;
+proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
+# Mitigate httpoxy attack (see README for details)
+proxy_set_header Proxy "";
+server {
+	server_name _; # This is just an invalid value which will never trigger on a real hostname.
+	listen 80;
+	access_log /var/log/nginx/access.log vhost;
+	return 503;
+}
+# web1.localhost
+upstream web1.localhost {
+# {4194531c95893121c6bb5ecedfc1d5bc05a8665b3b8f7e642dd5625d9b7d33b4 [{   80  tcp }] [{172.25.0.3 nginx-proxy 172.25.0.1 da1d3f3cf7e109d8d2be5d9254dbf1a139928aef9bd97a7e9da3975af11d9f76   02:42:ac:19:00:03 0 16}]  github_actions_testing_webserver1_1 4194531c9589 { php 7.2-apache} map[APACHE_CONFDIR:/etc/apache2 PHP_EXTRA_CONFIGURE_ARGS:--with-apxs2 --disable-cgi PHP_CFLAGS:-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 PHP_LDFLAGS:-Wl,-O1 -pie VIRTUAL_HOST:web1.localhost PHP_INI_DIR:/usr/local/etc/php PHP_EXTRA_BUILD_DEPS:apache2-dev PHP_VERSION:7.2.34 PHP_URL:https://www.php.net/distributions/php-7.2.34.tar.xz PHPIZE_DEPS:autoconf 		dpkg-dev 		file 		g++ 		gcc 		libc-dev 		make 		pkg-config 		re2c APACHE_ENVVARS:/etc/apache2/envvars PHP_SHA256:409e11bc6a2c18707dfc44bc61c820ddfd81e17481470f3405ee7822d8379903 PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin PHP_CPPFLAGS:-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 GPG_KEYS:1729F83938DA44E27BA0F4D3DBDB397470D12172 B1B44D8F021E4E2D6021E995DC9FF8D3EE5AF27F PHP_ASC_URL:https://www.php.net/distributions/php-7.2.34.tar.xz.asc] map[] {  {      }} map[com.docker.compose.version:1.27.4 com.docker.compose.config-hash:e5b36384c72a36608f72911ffe5af3b43dfa79fe28c4a2429ddf3bedf5804cb2 com.docker.compose.container-number:1 com.docker.compose.oneoff:False com.docker.compose.project:github_actions_testing com.docker.compose.project.config_files:docker-compose.yml com.docker.compose.project.working_dir:/Users/loanuser/projects/github_actions_testing com.docker.compose.service:webserver1]    [{ /Users/loanuser/projects/github_actions_testing/html /var/www/html  rw true}] {true}}
+# YOYOY: [{172.25.0.2 nginx-proxy 172.25.0.1 79264fd0fa58d6a55470dc6e99315c0ac7094d608be8897275e08ff71a34bb73   02:42:ac:19:00:02 0 16}]
+				## Can be connected with "nginx-proxy" network
+THIS ONE
+yo cont addr [{   80  tcp }]
+			# github_actions_testing_webserver1_1
+			server 172.25.0.3:80;
+}
+server {
+	server_name web1.localhost;
+	listen 80 ;
+	access_log /var/log/nginx/access.log vhost;
+	location / {
+		proxy_pass http://web1.localhost;
+	}
+}
