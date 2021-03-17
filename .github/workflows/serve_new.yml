@@ -1,0 +1,113 @@
+name: CI
+on:
+  push:
+    branches: [ SER-4 ]
+  pull_request:
+    branches: [ SER-4 ]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  select_project:
+    runs-on: ubuntu-latest
+    outputs:
+      new_project: ${{ steps.check-branch.outputs.new }}
+      old_project: ${{ steps.check-branch.outputs.old }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: check branch
+        id: check-branch
+        run: |
+          if [[ ${{ github.ref }} =~ ^refs/heads/SER-[0-9]* ]]; then
+              echo ::set-output name=new::true
+          elif [[ ${{ github.ref }} =~ ^refs/heads/DDPB-[0-9]* ]]; then
+              echo ::set-output name=old::true
+          else
+            echo "Please use a SER or DDPB prefix for your branch name!"
+            exit 1
+          fi
+          echo $WORKSPACE
+
+  cancel_redundant_builds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check branch
+        id: check-branch
+        run: echo "Cancelling redundant builds"
+
+  build_and_test:
+    runs-on: ubuntu-latest
+    needs: [cancel_redundant_builds, select_project]
+    if: select_project.outputs.new_project == 'true'
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: ./_serve-opg-new/
+          key: ${{ runner.os }}-${{ hashFiles('**/*.lock') }}
+      - name: Prepare localstack
+        working-directory: ./_serve-opg-new
+        run: echo "Running prepare localstack"
+      - name: Create dependencies
+        working-directory: ./_serve-opg-new
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: echo "Running create dependencies"
+      - name: Build
+        working-directory: ./_serve-opg-new
+        run: echo "Building and pushing to ECR"
+      - name: Unit test PHP
+        working-directory: ./_serve-opg-new
+        if: steps.check-branch.outputs.new == 'true'
+        run: echo "Running PHP unit tests"
+      - name: Unit tests Golang
+        working-directory: ./_serve-opg-new
+        run: echo "Running Go tests"
+
+  kick_off_old_wf:
+    runs-on: ubuntu-latest
+    needs: [cancel_redundant_builds, select_project]
+    if: select_project.outputs.old_project == 'true'
+    steps:
+      - name: Kick off old workflow
+        run: echo "kick off old workflow"
+
+
+  #      - name: Plan terraform to branch env
+  #      - name: Plan shared branch
+  #      - name: Apply terraform to branch env
+  #      - name: Protect branch environment
+  #      - name: Integration tests on branch
+  #      - name: Plan terraform on other environments
+  #      - name: Unprotect environment approval step
+  #      - name: Notify slack branch complete
+  #
+  #    merge pr
+  #
+  #    cancel redundant build - 1
+  #    checkout code - 1
+  #    check which build to run - 2
+  #
+  #
+  #    Create dependencies - 3
+  #    Build and push to ECR - 4
+  #    Terraform plan development-shared - 5
+  #    Terraform plan development - 5
+  #    PHP unit tests - 5
+  #    Go Tests - 5
+  #    Apply development-shared - 6
+  #    Apply developemnt - 7
+  #    Integration tests development - 8
+  #    Plan preproduction-shared - 8
+  #    Plan Preproduction - 9
+  #    Apply Preproduction-shared - 10
+  #    Apply preproduction - 11
+  #    Notify Slack - 12
+  #    Approval step - 12
+  #    Plan Production - 13
+  #    Apply Production - 14
+  #    Smoke test production - 15
+  #    Notify Success - 16
+  #    Notify Fail - 16
+  #    Create Release - 17
+  #    Rollback procedure - 17
